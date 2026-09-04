@@ -33,16 +33,18 @@ East Lakeview, and rewrites `data/layers.json`. Raw downloads are cached in
 
 Cloudflare Workers, static assets only. There is no build step and no server code.
 
+The Worker is connected to this repo through Cloudflare Workers Builds. A push to
+`main` triggers a build that runs `npx wrangler deploy` from the repo root. There
+is nothing to configure in GitHub.
+
+To deploy by hand:
+
 ```bash
 npx wrangler deploy
 ```
 
 `wrangler.jsonc` serves the repo root. `.assetsignore` keeps the source and the
 notes out of the bundle.
-
-Pushes to `main` deploy through `.github/workflows/deploy.yml`. It needs two
-repository secrets: `CLOUDFLARE_API_TOKEN` with the Workers Scripts edit
-permission, and `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Sources
 
