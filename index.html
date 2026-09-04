@@ -219,8 +219,9 @@ async function boot(){
     DATA = await r.json();
   }catch(err){
     document.getElementById("prompt").innerHTML =
-      '<div>Could not load data/layers.json. If you opened this file directly from disk, '+
-      'run a local server instead: <code>python3 -m http.server</code></div>';
+      '<div>The boundary data has not loaded, so there is nothing to draw yet. '+
+      'The map reads <code>data/layers.json</code>, which <code>tools/build.py</code> generates. '+
+      'Running this from disk will also fail. Serve it with <code>python3 -m http.server</code>.</div>';
     return;
   }
   start();
