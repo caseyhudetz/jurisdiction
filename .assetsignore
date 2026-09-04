@@ -1,0 +1,12 @@
+# Everything here is source or notes, not part of the served site.
+.git
+.github
+node_modules
+tools
+wrangler.jsonc
+package.json
+package-lock.json
+.assetsignore
+.gitignore
+CLAUDE.md
+README.md

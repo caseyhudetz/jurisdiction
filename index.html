@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jurisdiction — every line drawn through an East Lakeview address</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@110..125,600..800&family=Libre+Franklin:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBFAF7; --paper-2:#F1EFE9; --ink:#0F1A21; --body:#2C3A43;
+  --muted:#5F707B; --rule:#E1DED5; --rule-2:#CFCBC0;
+  --night:#0A151D; --night-2:#132430; --night-rule:#22394A; --night-text:#DCE7ED;
+  --flag:#E8324F;
+  --g1:#E8433F; --g2:#8B5CF6; --g3:#12A169; --g4:#DB8500; --g5:#2E8FE0;
+  --g6:#0FA5A0; --g7:#D14D9B; --g8:#7C9E14; --g9:#B8642A; --g0:#4C6D86;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--body);
+  font-family:"Libre Franklin",system-ui,sans-serif;font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+h1,h2{font-family:"Archivo","Libre Franklin",sans-serif;font-variation-settings:"wdth" 118}
+
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+#top{flex:0 0 auto;background:var(--night);color:var(--night-text);display:flex;align-items:center;
+  gap:24px;padding:0 22px;height:66px;border-bottom:1px solid var(--night-rule);z-index:30}
+#top h1{font-size:19px;font-weight:800;letter-spacing:-.02em;margin:0;color:#fff;white-space:nowrap}
+#top h1 .mark{color:var(--flag)}
+#lower{flex:1 1 auto;display:flex;min-height:0}
+#rail{width:466px;flex:0 0 466px;overflow-y:auto;background:var(--paper);border-right:1px solid var(--rule-2)}
+#map{flex:1;background:var(--night);position:relative}
+.leaflet-container{background:var(--night);font-family:inherit}
+.ghost{filter:invert(1) hue-rotate(186deg) saturate(.12) brightness(.92) contrast(.78);opacity:.42}
+
+/* search */
+#search{position:relative;flex:1 1 auto;max-width:460px}
+#q{width:100%;font:inherit;font-size:14px;color:#fff;background:var(--night-2);
+  border:1px solid var(--night-rule);border-radius:3px;padding:9px 12px 9px 34px}
+#q::placeholder{color:#6D8494}
+#q:focus{outline:none;border-color:var(--flag);background:#0F1F2A}
+#search .pin{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:11px;height:11px;
+  border-radius:50%;border:2px solid #6D8494;pointer-events:none}
+#clearq{position:absolute;right:9px;top:50%;transform:translateY(-50%);border:0;background:transparent;
+  color:#6D8494;font:inherit;font-size:17px;line-height:1;cursor:pointer;padding:3px 5px;display:none}
+#clearq.on{display:block}
+#clearq:hover{color:#fff}
+#hits{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--paper);
+  border:1px solid var(--rule-2);border-radius:3px;overflow:hidden;z-index:60;
+  box-shadow:0 14px 34px rgba(10,21,29,.32)}
+#hits:empty{display:none}
+#hits button{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);
+  background:transparent;border:0;border-top:1px solid var(--rule);padding:10px 13px;cursor:pointer}
+#hits button:first-child{border-top:0}
+#hits button:hover,#hits button.sel{background:var(--paper-2);outline:none}
+#hits .msg{padding:11px 13px;font-size:13px;color:var(--muted)}
+
+/* standing */
+.standing{padding:26px 28px 22px;border-bottom:1px solid var(--rule)}
+.standing .where{font-family:"Archivo",sans-serif;font-variation-settings:"wdth" 118;
+  font-size:26px;font-weight:700;line-height:1.1;letter-spacing:-.02em;color:var(--ink);
+  margin:0 0 9px;text-wrap:balance}
+.standing .sub{margin:0;font-size:14px;color:var(--muted);font-weight:300;max-width:44ch}
+.standing .sub b{font-weight:600;color:var(--ink)}
+.tryit{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}
+.tryit button{font:inherit;font-size:12.5px;font-weight:500;color:var(--ink);background:var(--paper-2);
+  border:1px solid var(--rule-2);border-radius:2px;padding:6px 10px;cursor:pointer}
+.tryit button:hover{border-color:var(--flag);color:var(--flag)}
+body.hasaddr .tryit{display:none}
+
+/* toolbar */
+.bar{display:flex;gap:7px;align-items:center;padding:11px 28px;border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--paper);z-index:10}
+.bar button{font:inherit;font-size:12.5px;font-weight:500;color:var(--ink);background:transparent;
+  border:1px solid var(--rule-2);border-radius:2px;padding:5px 10px;cursor:pointer}
+.bar button:hover{background:var(--paper-2);border-color:var(--ink)}
+.bar .tally{margin-left:auto;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* groups */
+.grp{border-bottom:1px solid var(--rule)}
+.ghead{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;color:var(--ink);
+  background:transparent;border:0;padding:15px 28px;cursor:pointer}
+.ghead:hover{background:var(--paper-2)}
+.gbead{width:9px;height:9px;border-radius:50%;background:var(--c);flex:0 0 9px}
+.gname{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.gtally{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;
+  padding:2px 7px;border:1px solid var(--rule-2);border-radius:9px}
+.grp.live .gtally{color:#fff;background:var(--c);border-color:var(--c)}
+.chev{width:9px;height:9px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);
+  transform:rotate(45deg);margin-left:2px;margin-top:-4px;transition:transform .16s}
+.grp.open .chev{transform:rotate(-135deg);margin-top:2px}
+.gbody{display:none;padding:0 28px 14px}
+.grp.open .gbody{display:block}
+.gsub{margin:-4px 0 12px;font-size:13px;color:var(--muted);font-weight:300;max-width:43ch}
+
+/* rows */
+.row{border-top:1px solid var(--rule);padding:10px 0}
+.rows .row:first-child{border-top:0}
+.rline{display:flex;align-items:flex-start;gap:11px}
+.cb{width:15px;height:15px;margin:3px 0 0;accent-color:var(--c);flex:0 0 15px;cursor:pointer}
+.spacer{width:15px;flex:0 0 15px}
+.rmain{flex:1 1 auto;text-align:left;font:inherit;color:inherit;background:transparent;border:0;
+  padding:0;cursor:pointer}
+.rname{display:block;font-size:12.5px;color:var(--muted)}
+.rval{display:block;font-size:16.5px;font-weight:600;color:var(--ink);letter-spacing:-.015em;
+  margin-top:1px;text-wrap:pretty}
+.rval.nil{font-weight:300;color:var(--muted);font-size:15px}
+.rwho{font-size:13px;margin-top:3px;color:var(--ink);font-weight:500}
+.rmeta{font-size:12.5px;margin-top:2px;color:var(--muted);font-weight:300}
+.rtoggle{flex:0 0 auto;width:20px;height:20px;border:0;background:transparent;cursor:pointer;
+  position:relative;margin-top:2px}
+.rtoggle:before,.rtoggle:after{content:"";position:absolute;background:var(--rule-2);left:50%;top:50%}
+.rtoggle:before{width:10px;height:1.6px;transform:translate(-50%,-50%)}
+.rtoggle:after{width:1.6px;height:10px;transform:translate(-50%,-50%);transition:transform .16s}
+.row.open .rtoggle:after{transform:translate(-50%,-50%) scaleY(0)}
+.rtoggle:hover:before,.rtoggle:hover:after{background:var(--ink)}
+.detail{display:none;padding:9px 0 4px 26px;border-left:2px solid var(--c);margin:9px 0 2px 6px}
+.row.open .detail{display:block}
+.detail p{margin:0 0 10px;font-size:13.5px;line-height:1.58;color:var(--body);max-width:45ch;font-weight:300}
+.links{display:flex;flex-wrap:wrap;gap:6px}
+.links a{font-size:12.5px;font-weight:500;color:var(--ink);text-decoration:none;
+  border:1px solid var(--rule-2);border-radius:2px;padding:4px 9px}
+.links a:hover{border-color:var(--c);color:var(--c)}
+
+.tail{padding:24px 28px 34px}
+.tail h2{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 4px;letter-spacing:-.01em}
+.colophon{padding:22px 28px 40px;border-top:1px solid var(--rule);color:var(--muted);
+  font-size:12.5px;font-weight:300;background:var(--paper-2)}
+.colophon p{margin:0 0 9px;max-width:46ch}
+.colophon a{color:var(--muted)}
+
+.leaflet-tooltip.tip{background:#fff;color:var(--ink);border:0;box-shadow:0 4px 16px rgba(0,0,0,.4);
+  border-radius:2px;font-size:12px;font-weight:600;padding:4px 8px}
+.leaflet-tooltip.tip:before{display:none}
+.here{width:14px;height:14px;background:var(--flag);border-radius:50%;
+  box-shadow:0 0 0 3px var(--night),0 0 0 5px var(--flag),0 0 22px rgba(232,50,79,.85)}
+.nearpin{width:9px;height:9px;background:var(--g0);border-radius:50%;box-shadow:0 0 0 2px var(--night)}
+.attrib{position:absolute;left:0;bottom:0;z-index:500;padding:5px 11px;font-size:10.5px;
+  color:#7E96A5;background:rgba(10,21,29,.82)}
+.attrib a{color:#7E96A5}
+.leaflet-bar a{background:var(--night-2);color:var(--night-text);border-color:var(--night-rule)}
+.leaflet-bar a:hover{background:#1B303E;color:#fff}
+#prompt{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;
+  justify-content:center;pointer-events:none;z-index:900}
+#prompt div{background:rgba(10,21,29,.86);border:1px solid var(--night-rule);border-radius:3px;
+  padding:13px 18px;color:var(--night-text);font-size:13.5px;max-width:340px;text-align:center;font-weight:300}
+body.hasaddr #prompt{display:none}
+
+*:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+
+@media (max-width:940px){
+  html,body{height:auto}
+  #app{height:auto;overflow:visible}
+  #top{height:auto;flex-wrap:wrap;gap:12px;padding:14px 18px}
+  #search{max-width:none;flex:1 1 100%}
+  #lower{display:flex;flex-direction:column}
+  #map{order:-1;position:sticky;top:0;height:46vh;flex:0 0 46vh}
+  #rail{order:1;width:100%;flex:1 1 auto;border-right:0;overflow:visible;height:auto}
+  .standing,.bar,.ghead,.tail,.colophon,.gbody{padding-left:18px;padding-right:18px}
+  .standing .where{font-size:22px}
+  .bar{top:46vh;overflow-x:auto;scrollbar-width:none}
+  .bar::-webkit-scrollbar{display:none}
+  .bar button,.bar .tally{white-space:nowrap;flex:0 0 auto}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <h1>Jurisdiction<span class="mark">.</span></h1>
+    <div id="search">
+      <span class="pin"></span>
+      <input id="q" type="text" autocomplete="off" spellcheck="false" autofocus
+             placeholder="Search an East Lakeview address" aria-label="Search an address">
+      <button id="clearq" aria-label="Clear">&times;</button>
+      <div id="hits" role="listbox"></div>
+    </div>
+  </header>
+  <div id="lower">
+    <div id="rail">
+      <div class="standing">
+        <p class="where" id="where">Every line the city has drawn through one address.</p>
+        <p class="sub" id="sub"></p>
+        <div class="tryit" id="tryit"></div>
+      </div>
+      <div class="bar">
+        <button id="allon">Show all</button>
+        <button id="alloff">Clear map</button>
+        <button id="expand">Expand groups</button>
+        <span class="tally"><span id="n">0</span> on map</span>
+      </div>
+      <div id="strata"></div>
+      <div class="tail" id="tail"></div>
+      <div class="colophon">
+        <p>Boundaries come from the City of Chicago's own ArcGIS service and the open data portal, clipped to East Lakeview, then tested against your address point in the browser. Search covers Diversey to Irving Park, the lake to Racine, because that is the extent of the data loaded here.</p>
+        <p>Responsibility notes are drawn from CDOT, Streets and Sanitation, Water Management, the Park District and the ward office. Programmes and prices change. Treat the links as the authority and this as the map of where to look.</p>
+        <p>Base map <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors. Geocoding by Nominatim.</p>
+      </div>
+    </div>
+    <div id="map">
+      <div id="prompt"><div>Search an address above to see which jurisdictions contain it. Until then, the boundaries are just lines.</div></div>
+      <div class="attrib">&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; Boundaries: City of Chicago</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* Boundary data lives in ./data/layers.json so this file stays small and editable.
+   Regenerate it with tools/build.py. Nothing else here needs to know how it was made. */
+let DATA;
+boot();
+async function boot(){
+  try{
+    const r = await fetch("./data/layers.json");
+    if(!r.ok) throw new Error(r.status);
+    DATA = await r.json();
+  }catch(err){
+    document.getElementById("prompt").innerHTML =
+      '<div>Could not load data/layers.json. If you opened this file directly from disk, '+
+      'run a local server instead: <code>python3 -m http.server</code></div>';
+    return;
+  }
+  start();
+}
+
+function start(){
+const G9="Who owns the ground in front of you", G0="Nearest to you";
+const GROUPS = {
+ "Who represents you":["--g1","Five ballots, five different maps. None of them line up."],
+ "How you get counted":["--g2","Boundaries that exist so somebody can total you up."],
+ "What can be built":["--g3","The rules your neighbours build under, and you do too."],
+ "Where the money moves":["--g4","Property tax that never reaches the general fund."],
+ "Who answers the call":["--g5","911 routing and community policing, from the block up."],
+ "Where kids go to school":["--g6","Attendance boundaries. A right to a seat, not a requirement."],
+ "Who keeps the block running":["--g7","The operational grid. Bigger than the political one."],
+ "Streets and right of way":["--g8","Lines drawn along the street rather than around you."],
+ [G9]:["--g9","The concrete, the grass, the tree, the pipe. Split between departments in ways almost nobody knows."],
+ [G0]:["--g0","The closest of each thing the city or the district actually operates."]
+};
+const DEFAULTS=["ward","community","precinct","cps_elem","police_beat","tif"];
+const cs=getComputedStyle(document.documentElement);
+const col=g=>cs.getPropertyValue(GROUPS[g][0]).trim();
+const EXAMPLES=["3200 N Broadway","500 W Belmont Ave","3600 N Halsted St","700 W Waveland Ave"];
+
+/* ---------- map ---------- */
+const map=L.map("map",{zoomControl:false,attributionControl:false}).setView([41.945,-87.646],14);
+L.control.zoom({position:"bottomright"}).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,className:"ghost"}).addTo(map);
+const BB=DATA.bbox;
+map.fitBounds([[41.9335,-87.6620],[41.9570,-87.6290]],{padding:[6,6]});
+
+const state={};
+DATA.layers.forEach(L0=>{
+  L0.geojson.features.forEach((f,i)=>f.properties.i=i);
+  const c=col(L0.group), heavy=L0.n>150, dash=L0.group==="How you get counted";
+  let base;
+  if(L0.kind==="poly") base={color:c,weight:heavy?0.9:1.7,opacity:heavy?.6:.9,dashArray:dash?"5 4":null,fill:true,fillColor:c,fillOpacity:0};
+  else if(L0.kind==="line") base={color:c,weight:3,opacity:.9,lineCap:"round"};
+  else base={color:c,weight:2,opacity:1,fillColor:c,fillOpacity:.9,radius:5};
+  const lyr=L.geoJSON(L0.geojson,{style:()=>base,
+    pointToLayer:(f,ll)=>L.circleMarker(ll,base),
+    onEachFeature:(f,l)=>{if(f.properties.n)l.bindTooltip(String(f.properties.n),{sticky:true,className:"tip"});}});
+  state[L0.key]={meta:L0,lyr,base,on:false,mine:-1,val:null};
+});
+
+function setOn(k,on){const s=state[k];if(!s||s.on===on)return;s.on=on;
+  on?s.lyr.addTo(map):map.removeLayer(s.lyr);
+  const b=document.querySelector(`input[data-k="${k}"]`);if(b)b.checked=on;tally();}
+function tally(){
+  document.getElementById("n").textContent=Object.values(state).filter(s=>s.on).length;
+  Object.keys(GROUPS).forEach(g=>{
+    const el=document.querySelector(`.grp[data-g="${CSS.escape(g)}"]`);if(!el)return;
+    const t=el.querySelector(".gtally");
+    const ks=DATA.layers.filter(l=>l.group===g).map(l=>l.key);
+    if(!ks.length)return;
+    const on=ks.filter(k=>state[k].on).length;
+    t.textContent=on?`${on}/${ks.length}`:ks.length;
+    el.classList.toggle("live",on>0);
+  });
+}
+function focus(k,on){
+  const s=state[k];if(!s)return;
+  if(on){if(!s.on){s.preview=true;setOn(k,true);}}
+  else if(s.preview){s.preview=false;setOn(k,false);return;}
+  if(s.meta.kind!=="poly"){s.lyr.setStyle(on?{...s.base,weight:s.base.weight+2,opacity:1}:s.base);
+    if(on)s.lyr.bringToFront();return;}
+  s.lyr.eachLayer(l=>{
+    const mine=l.feature.properties.i===s.mine;
+    if(!on)return l.setStyle(s.base);
+    l.setStyle(mine?{...s.base,weight:3,opacity:1,fillOpacity:.18,dashArray:null}
+                   :{...s.base,weight:1,opacity:.25,fillOpacity:0});
+    if(mine)l.bringToFront();});
+  if(on)s.lyr.bringToFront();
+}
+
+/* ---------- geometry ---------- */
+function inRing(x,y,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
+  if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
+function inPoly(x,y,p){if(!inRing(x,y,p[0]))return false;for(let k=1;k<p.length;k++)if(inRing(x,y,p[k]))return false;return true;}
+function inGeom(x,y,g){return g.type==="Polygon"?inPoly(x,y,g.coordinates)
+  :g.type==="MultiPolygon"?g.coordinates.some(p=>inPoly(x,y,p)):false;}
+function metres(a,b,c,d){const R=6371000,r=Math.PI/180;
+  const dp=(c-a)*r,dl=(d-b)*r,x=Math.sin(dp/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));}
+function dist(m){const ft=m*3.28084;
+  if(ft<160)return Math.round(ft/10)*10+" ft";
+  const blocks=ft/660;
+  if(blocks<12)return `${Math.round(ft/50)*50} ft, about ${blocks<1.3?"a block":Math.round(blocks)+" blocks"}`;
+  return (ft/5280).toFixed(1)+" miles";}
+
+let ADDR=null;
+function resolve(lat,lon){
+  DATA.layers.forEach(L0=>{const s=state[L0.key];s.mine=-1;s.val=null;
+    if(L0.kind!=="poly")return;
+    for(const f of L0.geojson.features){if(inGeom(lon,lat,f.geometry)){s.mine=f.properties.i;s.val=f.properties.n;break;}}});
+  const myWard=(state.ward&&state.ward.val||"").replace(/\D/g,"");
+  DATA.nearest.forEach(N=>{
+    let pool=N.pts;
+    if(N.key==="n_ward_office"&&myWard){
+      const m=N.pts.filter(p=>String(p.w)===myWard); if(m.length)pool=m;
+    }
+    let best=null,bd=Infinity;
+    pool.forEach(p=>{const d=metres(lat,lon,p.lat,p.lon);if(d<bd){bd=d;best=p;}});
+    N.best=best;N.d=bd;});
+  render();
+}
+function tok(txt){return (txt||"").replace(/\{(\w+)\}/g,(m,k)=>{
+  const s=state[k];return (s&&s.val)?s.val:"your district";});}
+
+/* ---------- build rail ---------- */
+const strata=document.getElementById("strata");
+function mkGroup(g){
+  const sec=document.createElement("section");
+  sec.className="grp";sec.dataset.g=g;sec.style.setProperty("--c",col(g));
+  sec.innerHTML=`<button class="ghead"><span class="gbead"></span><span class="gname">${g}</span>
+    <span class="gtally"></span><span class="chev"></span></button>
+    <div class="gbody"><p class="gsub">${GROUPS[g][1]}</p><div class="rows"></div></div>`;
+  sec.querySelector(".ghead").addEventListener("click",()=>sec.classList.toggle("open"));
+  strata.appendChild(sec);return sec.querySelector(".rows");
+}
+function detailHTML(what,contacts,c){
+  const links=(contacts||[]).map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`).join("");
+  return `<div class="detail"><p data-what>${what||""}</p>${links?`<div class="links">${links}</div>`:""}</div>`;
+}
+Object.keys(GROUPS).forEach(g=>{
+  const items=DATA.layers.filter(l=>l.group===g);
+  if(g===G9){
+    const rows=mkGroup(g);
+    DATA.ground.forEach(u=>{
+      const r=document.createElement("div");r.className="row";r.dataset.gk=u.key;
+      r.style.setProperty("--c",col(g));
+      r.innerHTML=`<div class="rline"><span class="spacer"></span>
+        <button class="rmain"><span class="rname">${u.label}</span>
+          <span class="rval" data-ans>${u.answer}</span></button>
+        <button class="rtoggle" aria-label="Details"></button></div>
+        ${detailHTML(u.what,u.contacts)}`;
+      const t=()=>r.classList.toggle("open");
+      r.querySelector(".rmain").addEventListener("click",t);
+      r.querySelector(".rtoggle").addEventListener("click",t);
+      rows.appendChild(r);});
+    document.querySelector(`.grp[data-g="${CSS.escape(g)}"] .gtally`).textContent=DATA.ground.length;
+    return;
+  }
+  if(g===G0){
+    const rows=mkGroup(g);
+    DATA.nearest.forEach(N=>{
+      const r=document.createElement("div");r.className="row";r.dataset.nk=N.key;
+      r.style.setProperty("--c",col(g));
+      r.innerHTML=`<div class="rline"><span class="spacer"></span>
+        <button class="rmain"><span class="rname">${N.label}</span>
+          <span class="rval nil" data-val>Search an address</span>
+          <span class="rmeta" data-meta></span></button>
+        <button class="rtoggle" aria-label="Details"></button></div>
+        ${detailHTML(N.what,N.contacts)}`;
+      const t=()=>r.classList.toggle("open");
+      r.querySelector(".rmain").addEventListener("click",t);
+      r.querySelector(".rtoggle").addEventListener("click",t);
+      rows.appendChild(r);});
+    document.querySelector(`.grp[data-g="${CSS.escape(g)}"] .gtally`).textContent=DATA.nearest.length;
+    return;
+  }
+  if(!items.length)return;
+  const rows=mkGroup(g);
+  items.forEach(l=>{
+    const r=document.createElement("div");r.className="row";r.dataset.k=l.key;
+    r.style.setProperty("--c",col(g));
+    r.innerHTML=`<div class="rline">
+      <input class="cb" type="checkbox" data-k="${l.key}" aria-label="Show ${l.label} on map">
+      <button class="rmain"><span class="rname">${l.label}</span>
+        <span class="rval nil" data-val>&mdash;</span><span class="rwho" data-who></span></button>
+      <button class="rtoggle" aria-label="Details"></button></div>
+      ${detailHTML(l.what,l.contacts)}`;
+    r.querySelector(".cb").addEventListener("change",e=>{state[l.key].preview=false;setOn(l.key,e.target.checked);});
+    const openIt=()=>{r.classList.toggle("open");
+      if(r.classList.contains("open")){state[l.key].preview=false;setOn(l.key,true);}};
+    r.querySelector(".rmain").addEventListener("click",openIt);
+    r.querySelector(".rtoggle").addEventListener("click",openIt);
+    ["mouseenter","focusin"].forEach(e=>r.addEventListener(e,()=>focus(l.key,true)));
+    ["mouseleave","focusout"].forEach(e=>r.addEventListener(e,()=>focus(l.key,false)));
+    rows.appendChild(r);});
+});
+
+/* unmapped tail */
+const tail=document.getElementById("tail");
+tail.innerHTML=`<h2>Yours, but not on this map</h2>
+  <p class="gsub">Five more jurisdictions claim any address here. The city does not publish their boundaries, so they live with the county and the state.</p><div class="rows"></div>`;
+DATA.unmapped.forEach(u=>{
+  const r=document.createElement("div");r.className="row";r.style.setProperty("--c","var(--muted)");
+  r.innerHTML=`<div class="rline"><span class="spacer"></span>
+    <button class="rmain"><span class="rname">${u.label}</span><span class="rval">${u.you}</span>
+      ${u.who?`<span class="rwho">Currently ${u.who}</span>`:""}</button>
+    <button class="rtoggle" aria-label="Details"></button></div>${detailHTML(u.what,u.contacts)}`;
+  const t=()=>r.classList.toggle("open");
+  r.querySelector(".rmain").addEventListener("click",t);
+  r.querySelector(".rtoggle").addEventListener("click",t);
+  tail.querySelector(".rows").appendChild(r);});
+
+/* try-it chips */
+const tryit=document.getElementById("tryit");
+EXAMPLES.forEach(a=>{const b=document.createElement("button");b.textContent=a;
+  b.onclick=()=>{q.value=a;lookup(a,true);};tryit.appendChild(b);});
+
+/* ---------- render ---------- */
+const nearLayer=L.layerGroup().addTo(map);
+function render(){
+  DATA.layers.forEach(l=>{
+    const s=state[l.key],r=document.querySelector(`.row[data-k="${l.key}"]`);
+    const v=r.querySelector("[data-val]"),w=r.querySelector("[data-who]");
+    if(l.kind!=="poly"){v.textContent=`${l.n} in view`;v.classList.add("nil");w.textContent="";return;}
+    if(!ADDR){v.innerHTML="&mdash;";v.classList.add("nil");w.textContent="";return;}
+    if(s.val){v.textContent=s.val;v.classList.remove("nil");}
+    else{v.textContent="Not inside one";v.classList.add("nil");}
+    w.textContent=(s.val&&l.who)?l.who:"";
+  });
+  DATA.ground.forEach(u=>{
+    const r=document.querySelector(`.row[data-gk="${u.key}"]`);
+    r.querySelector("[data-ans]").textContent=tok(u.answer);
+    r.querySelector("[data-what]").textContent=tok(u.what);
+  });
+  nearLayer.clearLayers();
+  DATA.nearest.forEach(N=>{
+    const r=document.querySelector(`.row[data-nk="${N.key}"]`);
+    const v=r.querySelector("[data-val]"),m=r.querySelector("[data-meta]");
+    if(!ADDR||!N.best){v.textContent="Search an address";v.classList.add("nil");m.textContent="";return;}
+    v.textContent=N.best.n;v.classList.remove("nil");
+    m.textContent=[dist(N.d),N.best.a,N.best.x].filter(Boolean).join(" · ");
+    L.marker([N.best.lat,N.best.lon],{icon:L.divIcon({className:"",html:'<div class="nearpin"></div>',
+      iconSize:[9,9],iconAnchor:[4.5,4.5]}),interactive:true})
+      .bindTooltip(`${N.label}: ${N.best.n}`,{className:"tip"}).addTo(nearLayer);
+  });
+  const polys=DATA.layers.filter(l=>l.kind==="poly");
+  const hit=polys.filter(l=>state[l.key].val).length;
+  document.getElementById("sub").innerHTML = ADDR
+    ? `Sits inside <b>${hit}</b> of ${polys.length} mapped jurisdictions, plus ${DATA.unmapped.length} the city does not publish. ${DATA.ground.length} more things out front belong to somebody else.`
+    : `${polys.length} boundaries mapped across East Lakeview, plus ${DATA.ground.length} notes on who owns the concrete, the grass and the pipe in front of any building here.`;
+  tally();
+}
+
+/* ---------- address ---------- */
+let marker=null;
+function goTo(lat,lon,label){
+  ADDR={lat,lon,label};
+  document.body.classList.add("hasaddr");
+  document.getElementById("where").textContent=label;
+  if(marker)marker.setLatLng([lat,lon]);
+  else marker=L.marker([lat,lon],{icon:L.divIcon({className:"",html:'<div class="here"></div>',
+    iconSize:[14,14],iconAnchor:[7,7]}),zIndexOffset:1000,interactive:false}).addTo(map);
+  resolve(lat,lon);
+  map.setView([lat,lon],Math.max(map.getZoom(),15),{animate:true});
+  if(!Object.values(state).some(s=>s.on))DATA.layers.forEach(l=>setOn(l.key,DEFAULTS.includes(l.key)));
+}
+
+/* ---------- typeahead ---------- */
+const q=document.getElementById("q"),hits=document.getElementById("hits"),clearq=document.getElementById("clearq");
+let timer=null,sel=-1,current=[];
+const within=(lat,lon)=>lat>=BB[0]&&lat<=BB[2]&&lon>=BB[1]&&lon<=BB[3];
+q.addEventListener("input",()=>{
+  clearq.classList.toggle("on",!!q.value);
+  clearTimeout(timer);const v=q.value.trim();
+  if(v.length<4){hits.innerHTML="";return;}
+  timer=setTimeout(()=>lookup(v),380);
+});
+q.addEventListener("keydown",e=>{
+  const btns=[...hits.querySelectorAll("button")];
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    if(!btns.length)return;e.preventDefault();
+    sel=(sel+(e.key==="ArrowDown"?1:-1)+btns.length)%btns.length;
+    btns.forEach((b,i)=>b.classList.toggle("sel",i===sel));
+    btns[sel].scrollIntoView({block:"nearest"});
+  } else if(e.key==="Enter"){
+    e.preventDefault();
+    if(btns.length)(btns[sel>=0?sel:0]).click();
+    else lookup(q.value.trim(),true);
+  } else if(e.key==="Escape"){hits.innerHTML="";q.blur();}
+});
+clearq.onclick=()=>{q.value="";hits.innerHTML="";clearq.classList.remove("on");q.focus();};
+document.addEventListener("click",e=>{if(!document.getElementById("search").contains(e.target))hits.innerHTML="";});
+
+async function lookup(v,auto){
+  if(!v||v.length<3)return;
+  hits.innerHTML='<div class="msg">Looking&hellip;</div>';sel=-1;
+  const url="https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=us"
+    +"&viewbox="+BB[1]+","+BB[2]+","+BB[3]+","+BB[0]+"&bounded=1&q="+encodeURIComponent(v+", Chicago, IL");
+  try{
+    const j=await (await fetch(url,{headers:{Accept:"application/json"}})).json();
+    const ok=j.filter(x=>within(+x.lat,+x.lon));
+    if(!ok.length){
+      hits.innerHTML='<div class="msg">No match inside East Lakeview. This map only loads boundaries between Diversey and Irving Park, the lake and Racine.</div>';return;}
+    const seen=new Set();
+    const uniq=ok.filter(x=>{const k=(+x.lat).toFixed(5)+","+(+x.lon).toFixed(5);
+      if(seen.has(k))return false;seen.add(k);return true;});
+    current=uniq.slice(0,6);
+    if(auto&&current.length){pick(current[0]);return;}
+    hits.innerHTML="";
+    current.forEach(x=>{const b=document.createElement("button");
+      b.textContent=label(x);
+      b.onclick=()=>pick(x);hits.appendChild(b);});
+  }catch(err){
+    hits.innerHTML='<div class="msg">Geocoder unreachable. Check the connection and try again.</div>';}
+}
+function label(x){
+  const a=x.address||{};
+  const street=[a.house_number,a.road].filter(Boolean).join(" ");
+  const area=a.neighbourhood||a.suburb||a.quarter||a.city_district||"";
+  if(street) return area?`${street}, ${area}`:street;
+  return x.display_name.split(",").slice(0,3).map(t=>t.trim()).join(", ");
+}
+function pick(x){
+  goTo(+x.lat,+x.lon,label(x));
+  hits.innerHTML="";q.value="";clearq.classList.remove("on");
+}
+
+/* ---------- controls ---------- */
+document.getElementById("allon").onclick=()=>DATA.layers.forEach(l=>setOn(l.key,true));
+document.getElementById("alloff").onclick=()=>DATA.layers.forEach(l=>setOn(l.key,false));
+const exp=document.getElementById("expand");
+exp.onclick=()=>{const anyClosed=[...document.querySelectorAll(".grp")].some(s=>!s.classList.contains("open"));
+  document.querySelectorAll(".grp").forEach(s=>s.classList.toggle("open",anyClosed));
+  exp.textContent=anyClosed?"Collapse groups":"Expand groups";};
+
+/* ---------- start ---------- */
+render();
+DATA.layers.forEach(l=>setOn(l.key,DEFAULTS.includes(l.key)));
+document.querySelector(`.grp[data-g="${CSS.escape(G9)}"]`).classList.add("open");
+q.focus();
+} /* end start() */
+</script>
+</body>
+</html>
