@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jurisdiction — loading address</title>
+<style>
+html,body,iframe{margin:0;width:100%;height:100%;border:0}body{overflow:hidden;background:#0A151D}.fallback{position:fixed;inset:auto 16px 16px 16px;z-index:2;background:#fff;color:#111;padding:12px 14px;border-radius:8px;font:14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2);display:none}.fallback.on{display:block}
+</style>
+</head>
+<body>
+<iframe id="jurisdiction" src="/" title="Jurisdiction"></iframe>
+<div class="fallback" id="fallback">We couldn't prefill that address. Use the search box above and try it manually.</div>
+<script>
+(function(){
+  var address=new URLSearchParams(location.search).get('address')||'';
+  var frame=document.getElementById('jurisdiction');
+  var fallback=document.getElementById('fallback');
+  if(!address){location.replace('/');return;}
+  frame.addEventListener('load',function(){
+    try{
+      var w=frame.contentWindow;
+      var d=frame.contentDocument;
+      var q=d.getElementById('q');
+      if(!q||typeof w.lookup!=='function') throw new Error('Search unavailable');
+      q.value=address;
+      q.dispatchEvent(new Event('input',{bubbles:true}));
+      w.lookup(address,true);
+    }catch(err){fallback.classList.add('on');}
+  });
+})();
+</script>
+</body>
+</html>
